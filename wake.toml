@@ -1,0 +1,16 @@
+[compiler.solc]
+target_version = "0.8.20"
+exclude_paths = ["node_modules", "venv", ".venv", "lib"]
+include_paths = ["contracts/node_modules"]
+remappings = [
+    "@openzeppelin/=contracts/lib/openzeppelin-contracts/",
+    "forge-std/=contracts/lib/forge-std/src/",
+    "@chainlink/=contracts/node_modules/@chainlink/",
+    "openzeppelin-contracts/=contracts/lib/openzeppelin-contracts/"
+]
+
+[detectors]
+exclude_paths = ["contracts/lib", "contracts/node_modules"]
+
+[lsp]
+compilation_delay = 0
