@@ -50,7 +50,7 @@ contract Crowdfund is ReentrancyGuard, Ownable {
 
     event CampaignCreated(uint indexed id, string title, uint goal, uint startAt, uint endAt);
     event Withdrawn(uint indexed id, uint amount);
-    event Refund(uint indexed id, uint amount);
+    event Refund(uint indexed id, address donor, uint ethAmount, uint usdcAmount);
     // Donated: index campaign id and donor so listeners can filter by campaign or donor.
     event Donated(uint indexed id, address indexed donor, uint amount, uint tier, uint256 tokenId);
     // NFTBurned: index campaignId and donor for easy lookup of burn activity per campaign or user.
@@ -224,7 +224,7 @@ contract Crowdfund is ReentrancyGuard, Ownable {
         if (usdcDonated > 0) {
             IERC20(address(usdc)).safeTransfer(msg.sender, usdcDonated);
         }
-        emit Refund(campaignId, campaign.raised);
+        emit Refund(campaignId, msg.sender, ethDonated, usdcDonated);
     }
 
     //@TODO
