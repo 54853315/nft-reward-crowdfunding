@@ -64,7 +64,7 @@ forge test --gas-report
 
 ```bash
 # 在本地 anvil 上广播脚
-forge script script/Crowdfund.s.sol:Crowdfund --rpc-url http://127.0.0.1:8545 --broadcast --private-key $PRIVATE_KEY -vvvv
+forge script script/Crowdfund.s.sol:CrowdfundDeployScript --rpc-url http://127.0.0.1:8545 --broadcast --private-key $PRIVATE_KEY -vvvv
 
 # 直接用 cast 与已部署合约交互
 cast send <CONTRACT_ADDRESS> "donateMockUSDC(uint256)" 1000000 --private-key $PRIVATE_KEY --rpc-url http://127.0.0.1:8545
