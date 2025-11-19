@@ -35,15 +35,7 @@ contract CrowdfundTest is Test {
     }
 
     function testCreateCampaign() public {
-        uint startAt = block.timestamp;
-        uint endAt = block.timestamp + 1 days;
-
-        (uint campaignId, string memory title) = crowdfund.createCampaign(
-            "Test Campaign",
-            10, // 10 ETH goal
-            startAt,
-            endAt
-        );
+        (uint campaignId, string memory title) = createCampaign();
 
         assertEq(campaignId, 0);
         assertEq(title, "Test Campaign");
@@ -59,9 +51,7 @@ contract CrowdfundTest is Test {
 
     function testDonateETH() public {
         // 创建活动
-        uint startAt = block.timestamp;
-        uint endAt = block.timestamp + 1 days;
-        crowdfund.createCampaign("Test", 10, startAt, endAt);
+        createCampaign();
 
         // 用户1 捐赠 0.4 ETH
         vm.prank(user1);
@@ -87,9 +77,7 @@ contract CrowdfundTest is Test {
 
     function testDonateUSDC() public {
         // 创建活动
-        uint startAt = block.timestamp;
-        uint endAt = block.timestamp + 1 days;
-        crowdfund.createCampaign("Test", 10, startAt, endAt);
+        createCampaign();
 
         // 用户1 授权并捐赠 1000 USDC
         vm.startPrank(user1);
@@ -107,9 +95,7 @@ contract CrowdfundTest is Test {
 
     function testUpgradeTier() public {
         // 创建活动
-        uint startAt = block.timestamp;
-        uint endAt = block.timestamp + 1 days;
-        crowdfund.createCampaign("Test", 100, startAt, endAt);
+        createCampaign();
 
         // 第一次捐赠 0.01 ETH (铜牌)
         vm.prank(user1);
@@ -132,9 +118,7 @@ contract CrowdfundTest is Test {
 
     function testWithdraw() public {
         // 创建活动
-        uint startAt = block.timestamp;
-        uint endAt = block.timestamp + 1 days;
-        crowdfund.createCampaign("Test", 10, startAt, endAt);
+        createCampaign();
 
         // 用户捐赠 15 ETH (超过目标)
         vm.prank(user1);
@@ -147,7 +131,7 @@ contract CrowdfundTest is Test {
         vm.stopPrank();
 
         // 时间快进到活动结束
-        vm.warp(endAt + 2 days);
+        vm.warp(31 days);
 
         // 记录 owner 初始余额
         uint ownerBalanceBefore = owner.balance;
@@ -165,12 +149,10 @@ contract CrowdfundTest is Test {
     }
 
     function testCannotDonateAfterEnd() public {
-        uint startAt = block.timestamp;
-        uint endAt = block.timestamp + 1 days;
-        crowdfund.createCampaign("Test", 10, startAt, endAt);
+        createCampaign();
 
         // 时间快进到活动结束后
-        vm.warp(endAt + 2 days);
+        vm.warp(31 days);
 
         // 尝试捐赠应该失败
         vm.prank(user1);
@@ -179,16 +161,14 @@ contract CrowdfundTest is Test {
     }
 
     function testCannotWithdrawBeforeGoalReached() public {
-        uint startAt = block.timestamp;
-        uint endAt = block.timestamp + 1 days;
-        crowdfund.createCampaign("Test", 10, startAt, endAt);
+        createCampaign();
 
         // 只捐赠 5 ETH (未达到目标)
         vm.prank(user1);
         crowdfund.donateRealETH{value: 5 ether}(0);
 
         // 时间快进
-        vm.warp(endAt + 2 days);
+        vm.warp(31 days);
 
         // 尝试提现应该失败
         vm.expectRevert("Goal not reached");
@@ -196,9 +176,7 @@ contract CrowdfundTest is Test {
     }
 
     function testCannotWithdrawTwice() public {
-        uint startAt = block.timestamp;
-        uint endAt = block.timestamp + 30 days;
-        crowdfund.createCampaign("Test", 10, startAt, endAt);
+        createCampaign();
 
         vm.prank(user1);
         crowdfund.donateRealETH{value: 15 ether}(0);
@@ -209,7 +187,7 @@ contract CrowdfundTest is Test {
         //     crowdfund.campaignTokenRaised(0, address(0)) / 1e18
         // );
 
-        vm.warp(endAt + 31 days);
+        vm.warp(31 days);
         crowdfund.withdraw(0);
         // console2.log("current address= %s", address(this));
         // console2.log("current msg.sender= %s", msg.sender);
@@ -292,11 +270,21 @@ contract CrowdfundTest is Test {
     }
 
     function testCannotRefundWhenAlreadyWithdrawn() public {
-        // TODO: 测试已提现后无法退款
-        // 1. 创建活动
-        // 2. 用户捐赠达到目标
-        // 3. 活动结束，owner 提现
-        // 4. 尝试退款，应该失败
+        // 测试已提现后无法退款
+        createCampaign();
+
+        vm.prank(user1);
+        crowdfund.donateRealETH{value: 15 ether}(0);
+
+        vm.warp(31 days);
+        crowdfund.withdraw(0);
+
+        // (, , , , , , , bool withdrawn) = crowdfund.campaigns(0);
+        // console.log("withdrawal: %b", withdrawn);
+
+        vm.prank(user1);
+        vm.expectRevert("Already withdrawn");
+        crowdfund.refund(0);
     }
 
     function testRefundWithInsufficientContractETH() public {
@@ -304,9 +292,9 @@ contract CrowdfundTest is Test {
         // 这是一个边界情况，可能需要特殊设置来模拟
     }
 
-    function createCampaign() internal {
+    function createCampaign() internal returns (uint, string memory) {
         uint startAt = block.timestamp;
         uint endAt = block.timestamp + 1 days;
-        crowdfund.createCampaign("Test", 10, startAt, endAt);
+        return crowdfund.createCampaign("Test Campaign", 10, startAt, endAt);
     }
 }

@@ -192,8 +192,8 @@ contract Crowdfund is ReentrancyGuard, Ownable {
         require(campaignId < campaigns.length, "Campaign does not exist");
         Campaign storage campaign = campaigns[campaignId];
         require(block.timestamp > campaign.endAt, "Campaign not ended");
-        require(campaign.raised < campaign.goal, "Campaign reached goal, cannot refund");
         require(!campaign.withdrawn, "Already withdrawn");
+        require(campaign.raised < campaign.goal, "Campaign reached goal, cannot refund");
         Donation storage d = donations[campaignId][msg.sender];
         require(d.amount > 0, "No donations");
         uint256 ethDonated = donationsTokenAmount[campaignId][msg.sender][address(0)];
