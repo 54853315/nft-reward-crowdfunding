@@ -185,7 +185,7 @@ export default defineComponent({
       if (wei == null) return '0';
       try {
         const num = parseFloat(ethers.formatEther(wei));
-        return Math.floor(num).toLocaleString('en-US');
+        return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       } catch {
         return String(wei);
       }
