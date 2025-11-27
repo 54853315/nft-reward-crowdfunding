@@ -28,6 +28,7 @@ contract Crowdfund is ReentrancyGuard, Ownable {
     struct Donation {
         uint amount;
         uint tier;
+        // uint[] tokenIds; // or mapping(uint=>bool)
     }
     Campaign[] public campaigns;
     mapping(uint => mapping(address => Donation)) public donations;
@@ -163,9 +164,10 @@ contract Crowdfund is ReentrancyGuard, Ownable {
     }
 
     // ✅
-    function withdraw(uint campaignId) external nonReentrant onlyOwner {
+    function withdraw(uint campaignId) external nonReentrant {
         require(campaignId < campaigns.length, "Campaign does not exist");
         Campaign storage campaign = campaigns[campaignId];
+        require(msg.sender == campaign.owner, "Not owner");
         require(!campaign.withdrawn, "Already withdrawn");
         require(block.timestamp > campaign.endAt, "Campaign not ended");
         require(campaign.raised >= campaign.goal, "Goal not reached");
