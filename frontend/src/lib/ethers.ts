@@ -7,6 +7,16 @@ let browserProvider: ethers.BrowserProvider | null = null;
 // let defaultProvider: ethers.getDefaultProvider | null = null;
 let signer: ethers.JsonRpcSigner | null = null;
 
+function isContractValid(contract: any): contract is ethers.Contract {
+  return !!(
+    contract &&
+    contract.target && // v6: string 地址
+    // 或 contract.address     // v5: string 地址
+    contract.interface && // Interface 实例
+    typeof contract.callStatic === "object"
+  );
+}
+
 export async function connectWallet(): Promise<string | null> {
   if (typeof window === "undefined" || !(window as any).ethereum) {
     console.error("No injected wallet found");
@@ -136,13 +146,18 @@ export async function getCrowdfundContract() {
 // --- Crowdfund helpers ---
 export async function getNextCampaignId(): Promise<number | null> {
   const contract = await getCrowdfundContract();
-  if (!contract) return null;
+  if (!isContractValid(contract)) return null;
   try {
     const id = await contract.nextCampaignId();
     return Number(id);
-  } catch (e) {
-    console.error("getNextCampaignId error", e);
-    return null;
+  } catch (e: any) {
+    if (e.code == "BAD_DATA" && e.value == "0x") {
+      console.warn("ethers v6 经典 0 值解析 bug，已自动修复");
+      return 0;
+    } else {
+      console.error("getNextCampaignId error", e);
+      return null;
+    }
   }
 }
 
