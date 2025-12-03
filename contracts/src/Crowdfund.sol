@@ -77,7 +77,12 @@ contract Crowdfund is ReentrancyGuard, Ownable {
         }
     }
 
-    modifier campaignActive(Campaign memory campaign) {
+    modifier onlyValidCampaign(uint256 campaignId) {
+        require(campaignId < campaigns.length, "Campaign not registered");
+        _;
+    }
+
+    modifier onlyCampaignActive(Campaign memory campaign) {
         require(block.timestamp < campaign.endAt, "Ended");
         require(block.timestamp >= campaign.startAt, "Not Yet");
         _;
@@ -87,7 +92,7 @@ contract Crowdfund is ReentrancyGuard, Ownable {
     function createCampaign(string memory title, uint goal, uint startAt, uint endAt) public returns (uint, string memory) {
         // require(startAt >= block.timestamp, "start at should be >= now");
         require(endAt > startAt, "end at should be > start at");
-        require(bytes(title).length != 0, "Title should not be empty");
+        require(bytes(title).length > 0, "Title should not be empty");
         require(goal > 0, "Goal should less 0 ");
         require(msg.sender != address(0), "contract can not create campaign");
 
@@ -105,7 +110,7 @@ contract Crowdfund is ReentrancyGuard, Ownable {
     }
 
     // ✅
-    function donateRealETH(uint campaignId) external payable nonReentrant campaignActive(campaigns[campaignId]) {
+    function donateRealETH(uint campaignId) external payable nonReentrant onlyValidCampaign(campaignId) onlyCampaignActive(campaigns[campaignId]) {
         require(campaignId < campaigns.length, "Campaign does not exist");
         require(msg.value > 0, "ETH amount must be greater than 0");
         campaignTokenRaised[campaignId][address(0)] += msg.value;
@@ -117,7 +122,7 @@ contract Crowdfund is ReentrancyGuard, Ownable {
     /**
      * @notice 向指定众筹活动使用模拟 USDC 捐款，并以 ETH 的等价金额记录该捐款。
      * @dev
-     * - 受 nonReentrant 修饰器保护以防重入攻击，并受 campaignActive(campaigns[campaignId]) 修饰器约束活动必须处于可接收捐款状态。
+     * - 受 nonReentrant 修饰器保护以防重入攻击，并受 onlyCampaignActive(campaigns[campaignId]) 修饰器约束活动必须处于可接收捐款状态。
      * - 将 USDC 数量转换为 ETH 等价的 wei 数量供内部记录：
      *     - 假设固定汇率为 1 ETH = 1000 USDC（即 USDC/ETH = 0.001）。
      *     - 考虑 USDC 使用 6 位小数，ETH 使用 18 位小数，因此计算：
@@ -131,7 +136,7 @@ contract Crowdfund is ReentrancyGuard, Ownable {
      * - 本函数使用了一个固定的汇率假设（1 ETH = 1000 USDC），如果要在生产环境使用须改为可配置或通过预言机获取实时汇率以避免估值偏差。
      * - amount 的溢出/下溢等边界取决于上层逻辑及 Solidity 版本的算术行为；若需要额外保护可在调用前验证范围。
      */
-    function donateMockUSDC(uint campaignId, uint256 amount) external nonReentrant campaignActive(campaigns[campaignId]) {
+    function donateMockUSDC(uint campaignId, uint256 amount) external nonReentrant onlyValidCampaign(campaignId) onlyCampaignActive(campaigns[campaignId]) {
         require(campaignId < campaigns.length, "Campaign does not exist");
         campaignTokenRaised[campaignId][address(usdc)] += amount;
         donationsTokenAmount[campaignId][msg.sender][address(usdc)] += amount;
