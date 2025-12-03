@@ -15,6 +15,8 @@ contract Crowdfund is ReentrancyGuard, Ownable {
     RewardNFT public nft;
     MockUSDC public usdc;
     uint public nextCampaignId;
+    uint public constant USDC_DECIMALS = 1e6;
+    uint public constant USDC_PER_ETH = 1000;
     struct Campaign {
         uint id;
         address owner;
@@ -28,9 +30,9 @@ contract Crowdfund is ReentrancyGuard, Ownable {
     struct Donation {
         uint amount;
         uint tier;
-        // uint[] tokenIds; // or mapping(uint=>bool)
     }
     Campaign[] public campaigns;
+    mapping(uint => mapping(address => uint[])) public donationNftTokens; // campaignId => donor => nft tokenIds
     mapping(uint => mapping(address => Donation)) public donations;
     // Tracks total raised amounts per campaign by token.
     // - Key:   campaignId
@@ -56,8 +58,8 @@ contract Crowdfund is ReentrancyGuard, Ownable {
     event Donated(uint indexed id, address indexed donor, uint amount, uint tier, uint256 tokenId);
     // NFTBurned: index campaignId and donor for easy lookup of burn activity per campaign or user.
     event NFTBurned(uint indexed campaignId, address indexed donor, uint tokenId);
-    // NFTBurnFailed: index tokenId so failures for a specific token can be queried.
-    event NFTBurnFailed(uint indexed tokenId);
+    // NFTBurnFailed: index campaignId so failures for a specific token can be queried.
+    event NFTBurnFailed(uint indexed campaignId, address indexed donor, uint tokenId);
 
     constructor(address _usdcAddress) Ownable(msg.sender) {
         // ethUsdPriceFeed = AggregatorV3Interface(
@@ -144,7 +146,7 @@ contract Crowdfund is ReentrancyGuard, Ownable {
         // 假设 USDC/ETH = 0.001，即 1 ETH = 1000 USDC
         // USDC 使用 6 位小数，ETH 使用 18 位小数
         // ethAmount = amount * 1e18 / (1000 * 1e6) = amount * 1e12 / 1000 = amount * 1e9
-        uint256 ethAmount = (amount * 1e18) / (1000 * 1e6);
+        uint256 ethAmount = (amount * 1e18) / (USDC_PER_ETH * USDC_DECIMALS);
         _recordDonate(campaignId, ethAmount);
     }
 
@@ -158,6 +160,7 @@ contract Crowdfund is ReentrancyGuard, Ownable {
         uint tier = _getTier(totalDonationAmount);
         donation.tier = tier;
         uint nftTokenId = nft.mint(msg.sender, tier);
+        donationNftTokens[campaignId][msg.sender].push(nftTokenId);
         emit Donated(campaignId, msg.sender, amount, tier, nftTokenId);
     }
 
@@ -197,41 +200,58 @@ contract Crowdfund is ReentrancyGuard, Ownable {
 
     function refund(uint campaignId) external nonReentrant {
         require(campaignId < campaigns.length, "Campaign does not exist");
-        Campaign storage campaign = campaigns[campaignId];
+        Campaign memory campaign = campaigns[campaignId];
         require(block.timestamp > campaign.endAt, "Campaign not ended");
         require(!campaign.withdrawn, "Already withdrawn");
         require(campaign.raised < campaign.goal, "Campaign reached goal, cannot refund");
-        Donation storage d = donations[campaignId][msg.sender];
-        require(d.amount > 0, "No donations");
-        uint256 ethDonated = donationsTokenAmount[campaignId][msg.sender][address(0)];
-        uint256 usdcDonated = donationsTokenAmount[campaignId][msg.sender][address(usdc)];
-        require(address(this).balance >= ethDonated, "Insufficient contract ETH");
+        require(donations[campaignId][msg.sender].amount > 0, "No donations");
 
+        (uint256 ethDonated, uint256 usdcDonated) = _settleRaisedAmounts(campaignId, msg.sender);
+        _refundAssets(msg.sender, ethDonated, usdcDonated);
+        _burnRewardNFTs(campaignId, msg.sender);
+        emit Refund(campaignId, msg.sender, ethDonated, usdcDonated);
+    }
+
+    function _settleRaisedAmounts(uint campaignId, address donor) internal returns (uint256, uint256) {
+        uint256 ethDonated = donationsTokenAmount[campaignId][donor][address(0)];
+        uint256 usdcDonated = donationsTokenAmount[campaignId][donor][address(usdc)];
+        require(address(this).balance >= ethDonated, "Insufficient contract ETH");
+        Campaign storage campaign = campaigns[campaignId];
+        Donation storage d = donations[campaignId][donor];
         d.amount = 0;
-        donationsTokenAmount[campaignId][msg.sender][address(0)] = 0;
+        donationsTokenAmount[campaignId][donor][address(0)] = 0;
         campaignTokenRaised[campaignId][address(0)] -= ethDonated;
         campaign.raised -= ethDonated;
-        donationsTokenAmount[campaignId][msg.sender][address(usdc)] = 0;
+        donationsTokenAmount[campaignId][donor][address(usdc)] = 0;
         campaignTokenRaised[campaignId][address(usdc)] -= usdcDonated;
         // 将 USDC 对应的 ETH 等价值从 raised 中减去
-        uint256 usdcEthEquivalent = (usdcDonated * 1e18) / (1000 * 1e6);
+        uint256 usdcEthEquivalent = (usdcDonated * 1e18) / (USDC_PER_ETH * USDC_DECIMALS);
         campaign.raised -= usdcEthEquivalent;
 
-        //@TODO 需记录tokeId  到 mapping
-        // try nft.burn(tokenId) {
-        //     emit NFTBurned(campaignId, msg.sender, tokenId);
-        // } catch {
-        //     emit NFTBurnFailed(campaignId, msg.sender, tokenId);
-        // }
+        return (ethDonated, usdcDonated);
+    }
 
-        if (ethDonated > 0) {
-            (bool sent, ) = payable(msg.sender).call{value: ethDonated}("");
+    function _refundAssets(address donor, uint256 ethAmount, uint256 usdcAmount) internal {
+        if (ethAmount > 0) {
+            (bool sent, ) = payable(donor).call{value: ethAmount}("");
             require(sent, "ETH transfer failed");
         }
-        if (usdcDonated > 0) {
-            IERC20(address(usdc)).safeTransfer(msg.sender, usdcDonated);
+        if (usdcAmount > 0) {
+            IERC20(address(usdc)).safeTransfer(donor, usdcAmount);
         }
-        emit Refund(campaignId, msg.sender, ethDonated, usdcDonated);
+    }
+
+    function _burnRewardNFTs(uint campaignId, address donor) internal {
+        uint[] storage nftTokens = donationNftTokens[campaignId][donor];
+        for (uint i = nftTokens.length; i > 0; i--) {
+            uint tokenId = nftTokens[i - 1];
+            nftTokens.pop();
+            try nft.burn(tokenId) {
+                emit NFTBurned(campaignId, donor, tokenId);
+            } catch {
+                emit NFTBurnFailed(campaignId, donor, tokenId);
+            }
+        }
     }
 
     //@TODO
