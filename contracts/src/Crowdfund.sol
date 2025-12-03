@@ -212,23 +212,30 @@ contract Crowdfund is ReentrancyGuard, Ownable {
         emit Refund(campaignId, msg.sender, ethDonated, usdcDonated);
     }
 
-    function _settleRaisedAmounts(uint campaignId, address donor) internal returns (uint256, uint256) {
-        uint256 ethDonated = donationsTokenAmount[campaignId][donor][address(0)];
-        uint256 usdcDonated = donationsTokenAmount[campaignId][donor][address(usdc)];
-        require(address(this).balance >= ethDonated, "Insufficient contract ETH");
+    function _settleRaisedAmounts(uint campaignId, address donor) internal returns (uint256 ethDonated, uint256 usdcDonated) {
         Campaign storage campaign = campaigns[campaignId];
-        Donation storage d = donations[campaignId][donor];
-        d.amount = 0;
-        donationsTokenAmount[campaignId][donor][address(0)] = 0;
-        campaignTokenRaised[campaignId][address(0)] -= ethDonated;
-        campaign.raised -= ethDonated;
-        donationsTokenAmount[campaignId][donor][address(usdc)] = 0;
-        campaignTokenRaised[campaignId][address(usdc)] -= usdcDonated;
-        // 将 USDC 对应的 ETH 等价值从 raised 中减去
-        uint256 usdcEthEquivalent = (usdcDonated * 1e18) / (USDC_PER_ETH * USDC_DECIMALS);
-        campaign.raised -= usdcEthEquivalent;
+        Donation storage donation = donations[campaignId][donor];
+        mapping(address => uint256) storage donorTokenAmounts = donationsTokenAmount[campaignId][donor];
 
-        return (ethDonated, usdcDonated);
+        ethDonated = donorTokenAmounts[address(0)];
+        usdcDonated = donorTokenAmounts[address(usdc)];
+        require(address(this).balance >= ethDonated, "Insufficient contract ETH");
+
+        donorTokenAmounts[address(0)] = 0;
+        donorTokenAmounts[address(usdc)] = 0;
+        donation.amount = 0;
+
+        campaignTokenRaised[campaignId][address(0)] -= ethDonated;
+        campaignTokenRaised[campaignId][address(usdc)] -= usdcDonated;
+
+        //将 USDC 对应的 ETH 等价值从 raised 中减去
+        uint256 totalEthImpact = ethDonated + _usdcToEth(usdcDonated);
+        campaign.raised -= totalEthImpact;
+    }
+
+    function _usdcToEth(uint256 usdcAmount) internal pure returns (uint256) {
+        if (usdcAmount == 0) return 0;
+        return (usdcAmount * 1e18) / (USDC_PER_ETH * USDC_DECIMALS);
     }
 
     function _refundAssets(address donor, uint256 ethAmount, uint256 usdcAmount) internal {
