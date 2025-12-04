@@ -261,6 +261,11 @@ contract Crowdfund is ReentrancyGuard, Ownable {
         }
     }
 
+    // Emergency functions
+    function emergencyWithdraw() public onlyOwner {
+        payable(owner()).transfer(address(this).balance);
+    }
+
     //@TODO
     function getETHPrice() public view returns (int) {
         (, int price, , , ) = usdcUsdPriceFeed.latestRoundData();
