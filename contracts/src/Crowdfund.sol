@@ -11,7 +11,6 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
 contract Crowdfund is ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
-    // address public owner;
     RewardNFT public nft;
     MockUSDC public usdc;
     uint public nextCampaignId;
@@ -185,14 +184,14 @@ contract Crowdfund is ReentrancyGuard, Ownable {
         uint256 ethAmount = campaignTokenRaised[campaignId][address(0)];
         require(address(this).balance >= ethAmount, "Insufficient contract ETH");
         if (ethAmount > 0) {
-            (bool sent, ) = payable(owner()).call{value: ethAmount}("");
+            (bool sent, ) = payable(campaign.owner).call{value: ethAmount}("");
             require(sent, "ETH transfer failed");
         }
 
         // 提取该活动募集的 USDC
         uint256 usdcAmount = campaignTokenRaised[campaignId][address(usdc)];
         if (usdcAmount > 0) {
-            IERC20(address(usdc)).safeTransfer(owner(), usdcAmount);
+            IERC20(address(usdc)).safeTransfer(campaign.owner, usdcAmount);
         }
 
         emit Withdrawn(campaignId, campaign.raised);
