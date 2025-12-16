@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 // import "erc721a/contracts/ERC721A.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-contract RewardNFT is ERC721URIStorage, Ownable {
+contract RewardNFT is ERC721, Ownable {
     string[3] baseURI = ["ipfs://bronze/", "ipfs://silver/", "ipfs://gold/"];
     uint256 private _nextTokenId;
 
